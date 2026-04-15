@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+    <title>Ask Margaret</title>
+    <link rel="stylesheet" href="result.css" />
+  </head>
+  <body>
+    <main>
+      <div id="stage">
+        <canvas id="screen"></canvas>
+      </div>
+      <section id="panel">
+        <p id="explanation">Thinking...</p>
+        <div id="buttons">
+          <button id="got-it" class="primary">Got it, thanks</button>
+          <button id="again" class="secondary">Show me again</button>
+          <button id="still">I still don't see it</button>
+        </div>
+      </section>
+    </main>
+    <script src="result.js"></script>
+  </body>
+</html>

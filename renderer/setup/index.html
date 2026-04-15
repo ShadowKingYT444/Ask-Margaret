@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+    <title>Welcome to Ask Margaret</title>
+    <link rel="stylesheet" href="setup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Welcome to Ask Margaret</h1>
+      <p class="subtitle">Before we start, please paste your Google Gemini API key.</p>
+
+      <div class="help">
+        <p><strong>Don't have one yet?</strong></p>
+        <ol>
+          <li>Open <a href="#" id="openKeyLink">https://aistudio.google.com/apikey</a> in your browser.</li>
+          <li>Sign in with your Google account.</li>
+          <li>Click <em>Create API key</em> and copy it.</li>
+          <li>Paste it below.</li>
+        </ol>
+      </div>
+
+      <label for="key">Gemini API key</label>
+      <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza..." />
+      <label class="show-row"><input id="show" type="checkbox" /> Show key</label>
+
+      <button id="save">Save and start</button>
+      <p id="status" class="status" role="status"></p>
+    </main>
+    <script src="setup.js"></script>
+  </body>
+</html>

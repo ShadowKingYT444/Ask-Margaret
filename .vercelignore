@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+src/
+renderer/
+scripts/
+test_screens/
+assets/
+*.md
+*.ts
+tsconfig.json
+package.json
+package-lock.json

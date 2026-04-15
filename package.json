@@ -1,0 +1,79 @@
+{
+  "name": "ask-margaret",
+  "version": "0.1.0",
+  "description": "One-button desktop helper for seniors. Ask out loud, get an annotated screenshot back.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.js",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --enable-logging",
+    "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win",
+    "package:mac": "npm run build && electron-builder --mac"
+  },
+  "keywords": [
+    "electron",
+    "accessibility",
+    "seniors",
+    "ai",
+    "gemini"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^1.50.1",
+    "dotenv": "^16.4.5",
+    "ffmpeg-static": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "com.askmargaret.app",
+    "productName": "Ask Margaret",
+    "files": [
+      "dist/**/*",
+      "renderer/**/*",
+      "src/prompts/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/ffmpeg-static/**"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png",
+      "artifactName": "Ask-Margaret-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ask Margaret",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png",
+      "category": "public.app-category.utilities",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Ask Margaret needs the microphone to hear your question.",
+        "NSScreenCaptureUsageDescription": "Ask Margaret needs to see your screen to help you."
+      }
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  }
+}
