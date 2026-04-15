@@ -9,14 +9,53 @@
   <body>
     <main>
       <div id="stage">
-        <canvas id="screen"></canvas>
+        <!-- CLICK / WALKTHROUGH layout: full screenshot + zoom inset -->
+        <div id="visual" class="hidden">
+          <div class="full">
+            <canvas id="screen"></canvas>
+          </div>
+          <div class="zoom">
+            <div class="zoom-title">Zoomed in</div>
+            <canvas id="zoomCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- SCAM layout -->
+        <div id="scamView" class="hidden">
+          <div id="scamBadge">Checking...</div>
+          <h2 id="scamHeadline"></h2>
+          <ul id="scamReasons"></ul>
+          <div id="scamAction"></div>
+        </div>
+
+        <!-- READ layout -->
+        <div id="readView" class="hidden">
+          <div class="kind-pill" id="readKind"></div>
+          <h2 id="readTitle"></h2>
+          <p id="readSummary"></p>
+          <ul id="readBullets"></ul>
+          <div id="readAction"></div>
+        </div>
       </div>
+
       <section id="panel">
+        <!-- Walkthrough progress -->
+        <div id="walkProgress" class="hidden">
+          <div class="step-counter"><span id="stepNum">1</span> of <span id="stepTotal">3</span></div>
+          <div class="goal" id="goalText"></div>
+          <ol id="stepList"></ol>
+          <div id="suggestedWrap" class="hidden">
+            <div class="suggested-label">Suggested to type:</div>
+            <div id="suggestedText"></div>
+          </div>
+        </div>
+
         <p id="explanation">Thinking...</p>
+
         <div id="buttons">
           <button id="got-it" class="primary">Got it, thanks</button>
-          <button id="again" class="secondary">Show me again</button>
-          <button id="still">I still don't see it</button>
+          <button id="again" class="secondary">Read it to me again</button>
+          <button id="still">I still don't understand</button>
         </div>
       </section>
     </main>

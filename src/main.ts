@@ -135,17 +135,28 @@ function openResultWindow(): void {
     resultWin.focus();
     return;
   }
+  const { workArea } = screen.getPrimaryDisplay();
   resultWin = new BrowserWindow({
-    width: 1100,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: workArea.width,
+    height: workArea.height,
+    x: workArea.x,
+    y: workArea.y,
+    minWidth: 900,
+    minHeight: 700,
     title: "Ask Margaret",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+  resultWin.setMenuBarVisibility(false);
+  resultWin.once("ready-to-show", () => {
+    if (resultWin && !resultWin.isDestroyed()) {
+      resultWin.maximize();
+      resultWin.show();
+    }
   });
   resultWin.loadFile(rendererPath("result", "index.html"));
   resultWin.on("closed", () => {

@@ -59,7 +59,14 @@ h1 {
   font-size: 20px;
 }
 
-.hero p { margin: 0; }
+.hero p { margin: 0 0 14px; }
+.hero-list {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  font-size: 18px;
+  line-height: 1.55;
+}
+.hero-list li { margin: 10px 0; }
 
 .step {
   background: var(--card);
