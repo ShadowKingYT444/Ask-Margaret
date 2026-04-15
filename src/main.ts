@@ -5,15 +5,9 @@ import * as dotenv from "dotenv";
 import { transcribe } from "./ai/transcribe";
 import { analyze, analyzeFollowup, Verdict } from "./ai/analyze";
 
-// Load .env from every plausible location so the key resolves in dev AND in packaged app.
-for (const candidate of [
-  path.join(process.cwd(), ".env"),
-  path.join(__dirname, "..", ".env"),
-  process.resourcesPath ? path.join(process.resourcesPath, ".env") : "",
-  app.isReady() ? path.join(app.getPath("userData"), ".env") : "",
-]) {
-  if (candidate && fs.existsSync(candidate)) dotenv.config({ path: candidate });
-}
+// Reset any inherited key: we only trust the one stored under userData after setup.
+// Otherwise Windows user env vars or a project .env silently bypass the setup flow.
+delete process.env.GEMINI_API_KEY;
 
 let buttonWin: BrowserWindow | null = null;
 let resultWin: BrowserWindow | null = null;
@@ -24,18 +18,16 @@ function userEnvPath(): string {
 }
 
 function hasApiKey(): boolean {
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0) return true;
   const p = userEnvPath();
-  if (fs.existsSync(p)) {
-    try {
-      const parsed = dotenv.parse(fs.readFileSync(p));
-      if (parsed.GEMINI_API_KEY && parsed.GEMINI_API_KEY.trim().length > 0) {
-        process.env.GEMINI_API_KEY = parsed.GEMINI_API_KEY;
-        return true;
-      }
-    } catch {
-      // ignore
+  if (!fs.existsSync(p)) return false;
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(p));
+    if (parsed.GEMINI_API_KEY && parsed.GEMINI_API_KEY.trim().length > 0) {
+      process.env.GEMINI_API_KEY = parsed.GEMINI_API_KEY;
+      return true;
     }
+  } catch {
+    // ignore
   }
   return false;
 }
@@ -340,10 +332,6 @@ app.whenReady().then(() => {
       }
     );
   }
-
-  // Late load: user-editable override in userData (shipped installs).
-  const userEnv = userEnvPath();
-  if (fs.existsSync(userEnv)) dotenv.config({ path: userEnv, override: true });
 
   const testMode =
     process.argv.includes("--test-harness") || process.env.MARGARET_TEST === "1";

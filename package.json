@@ -60,7 +60,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Ask Margaret",
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": "dmg",
