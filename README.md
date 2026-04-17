@@ -1,10 +1,11 @@
 # Ask Margaret
 
-One-button desktop helper for seniors. They press the floating button, speak their question, and get back an annotated screenshot of their own screen with a circle around what to look at next — read aloud in a friendly voice.
+One-button desktop helper for seniors. They press the floating button, speak their question, and get back an annotated screenshot of their own screen with a circle around what to look at next — read aloud in a friendly voice. After the answer, they can keep talking: a voice chatbot inside the answer window remembers the conversation and explains any term, condition, or worry in plain language.
 
-- **Stack:** Electron + TypeScript, local Whisper (`nodejs-whisper`), Google Gemini 2.5 Flash for vision, Web Speech API for TTS.
+- **Stack:** Electron + TypeScript, Google Gemini 2.5 Pro / 2.5 Flash for audio + vision + chat, Web Speech API for TTS.
+- **Modes:** show me where · is this a scam · read this to me · walk me through it · **ask Margaret anything** (new multi-turn voice chat).
 - **Cost:** $0. Only network call is to Gemini (free tier).
-- **Privacy:** Voice never leaves the machine. Only the screenshot + transcript are sent to Gemini.
+- **Privacy:** Only the screenshot and transcribed text are sent to Gemini. No chat history is stored on disk.
 
 ## Setup (first run)
 
@@ -47,11 +48,17 @@ ask-margaret/
 │   ├── main.ts              # Electron main: windows, IPC, screen capture
 │   ├── preload.ts           # contextBridge API exposed to the renderer
 │   ├── ai/
-│   │   ├── transcribe.ts    # webm -> wav (ffmpeg-static) -> nodejs-whisper
-│   │   └── analyze.ts       # Gemini 2.5 Flash vision call
+│   │   ├── transcribe.ts    # webm -> wav (ffmpeg-static) -> Gemini audio
+│   │   ├── analyze.ts       # Gemini vision + mode routing (click / scam / read / walkthrough)
+│   │   └── chat.ts          # multi-turn voice chatbot (screenshot-aware)
 │   └── prompts/
+│       ├── router_prompt.txt
 │       ├── analyze_prompt.txt
-│       └── followup_prompt.txt
+│       ├── scam_prompt.txt
+│       ├── read_prompt.txt
+│       ├── walkthrough_prompt.txt
+│       ├── followup_prompt.txt
+│       └── chat.txt
 ├── renderer/
 │   ├── button/              # floating "I need help" window
 │   └── result/              # annotated screenshot + TTS window
