@@ -5,10 +5,20 @@ type AskPayload = {
   screenshotBuffer: ArrayBuffer;
 };
 
+type ChatTurn = { role: "user" | "assistant"; content: string };
+type ChatPayload = {
+  audioBuffer: ArrayBuffer;
+  history: ChatTurn[];
+};
+
 contextBridge.exposeInMainWorld("api", {
   captureScreen: (): Promise<Uint8Array> => ipcRenderer.invoke("capture-screen"),
   askMargaret: (payload: AskPayload): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("ask-margaret", payload),
+  chatMargaret: (
+    payload: ChatPayload
+  ): Promise<{ ok: boolean; answer?: string; transcribedQuestion?: string; error?: string }> =>
+    ipcRenderer.invoke("chat-margaret", payload),
   resultReady: (): Promise<void> => ipcRenderer.invoke("result-ready"),
   tryAgain: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("try-again"),
   closeResult: (): Promise<void> => ipcRenderer.invoke("close-result"),
