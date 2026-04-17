@@ -1,4 +1,4 @@
-/* global window, document, Image, SpeechSynthesisUtterance, speechSynthesis */
+/* global window, document, navigator, MediaRecorder, Blob, requestAnimationFrame, Image, SpeechSynthesisUtterance, speechSynthesis */
 
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
@@ -14,6 +14,11 @@ const visualEl = document.getElementById("visual");
 const scamViewEl = document.getElementById("scamView");
 const readViewEl = document.getElementById("readView");
 const walkProgEl = document.getElementById("walkProgress");
+
+const chatMicBtn = document.getElementById("chatMicBtn");
+const chatMicLabel = document.getElementById("chatMicLabel");
+const chatStatusEl = document.getElementById("chatStatus");
+const chatLogEl = document.getElementById("chatLog");
 
 let preferredVoice = null;
 let lastSpoken = "";
@@ -206,7 +211,7 @@ function composeHeadline(verdict) {
   return verdict.explanation || "";
 }
 
-window.api.onShowResult(({ screenshotBase64, verdict }) => {
+window.api.onShowResult(({ screenshotBase64, verdict, transcript }) => {
   hideAll();
   const mode = verdict && verdict.mode;
   if (mode === "scam_check") {
@@ -222,6 +227,7 @@ window.api.onShowResult(({ screenshotBase64, verdict }) => {
   explanationEl.textContent = composeHeadline(verdict) || "Here's what I found.";
   speak(composeSpeech(verdict));
   stillBtn.disabled = false;
+  seedChatHistory(transcript, verdict);
 });
 
 gotIt.addEventListener("click", () => {
@@ -245,3 +251,204 @@ stillBtn.addEventListener("click", async () => {
 });
 
 window.api.resultReady();
+
+/* ---------- Chatbot ---------- */
+
+const SILENCE_MS = 1800;
+const SILENCE_THRESHOLD = 0.012;
+const MAX_HISTORY_TURNS = 10;
+
+let chatHistory = [];
+let chatRecording = false;
+let chatThinking = false;
+
+function seedChatHistory(transcript, verdict) {
+  chatHistory = [];
+  if (transcript && transcript.trim().length > 0) {
+    chatHistory.push({ role: "user", content: transcript.trim() });
+  }
+  const spoken = composeSpeech(verdict);
+  if (spoken && spoken.trim().length > 0) {
+    chatHistory.push({ role: "assistant", content: spoken.trim() });
+  }
+}
+
+function setChatStatus(text, isError) {
+  chatStatusEl.textContent = text || "";
+  chatStatusEl.classList.toggle("error", !!isError);
+}
+
+function appendBubble(role, text) {
+  const div = document.createElement("div");
+  div.className = "bubble " + role;
+  div.textContent = text;
+  chatLogEl.appendChild(div);
+  chatLogEl.scrollTop = chatLogEl.scrollHeight;
+}
+
+function setChatButtonState(state) {
+  chatMicBtn.classList.remove("recording", "thinking");
+  chatMicBtn.disabled = false;
+  if (state === "recording") {
+    chatMicBtn.classList.add("recording");
+    chatMicLabel.textContent = "Listening... (tap to stop)";
+  } else if (state === "thinking") {
+    chatMicBtn.classList.add("thinking");
+    chatMicBtn.disabled = true;
+    chatMicLabel.textContent = "Margaret is thinking...";
+  } else {
+    chatMicLabel.textContent = chatHistory.length > 0
+      ? "Ask another question"
+      : "Ask a follow-up question";
+  }
+}
+
+function recordAudio() {
+  return new Promise((resolve, reject) => {
+    let mediaRecorder = null;
+    let stream = null;
+    let audioCtx = null;
+    let stopped = false;
+    const chunks = [];
+
+    const cleanup = () => {
+      if (audioCtx) {
+        audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
+    };
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      chatRecording = false;
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    };
+
+    // Allow click-to-stop while recording.
+    const onClickStop = () => {
+      if (chatRecording) stop();
+    };
+    chatMicBtn.addEventListener("click", onClickStop, { once: true });
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
+      stream = s;
+      try {
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      } catch (e) {
+        cleanup();
+        reject(e);
+        return;
+      }
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        cleanup();
+        try {
+          const blob = new Blob(chunks, { type: "audio/webm" });
+          const buf = await blob.arrayBuffer();
+          resolve(buf);
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      mediaRecorder.start();
+      chatRecording = true;
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+      let lastLoudAt = Date.now();
+
+      const tick = () => {
+        if (stopped) return;
+        analyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        const rms = Math.sqrt(sum / buf.length);
+        if (rms > SILENCE_THRESHOLD) lastLoudAt = Date.now();
+        if (Date.now() - lastLoudAt > SILENCE_MS) {
+          stop();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      // Brief warm-up before silence detection engages.
+      setTimeout(() => {
+        lastLoudAt = Date.now();
+        tick();
+      }, 400);
+    }).catch((err) => {
+      cleanup();
+      chatMicBtn.removeEventListener("click", onClickStop);
+      reject(err);
+    });
+  });
+}
+
+chatMicBtn.addEventListener("click", async () => {
+  if (chatRecording || chatThinking) return;
+  speechSynthesis.cancel();
+  setChatStatus("Listening...");
+  setChatButtonState("recording");
+
+  let audioBuffer;
+  try {
+    audioBuffer = await recordAudio();
+  } catch (err) {
+    console.error("[chat] mic error:", err);
+    setChatStatus("I can't access the microphone. Check permissions.", true);
+    setChatButtonState("idle");
+    return;
+  }
+
+  chatThinking = true;
+  setChatStatus("Margaret is thinking...");
+  setChatButtonState("thinking");
+
+  let res;
+  try {
+    res = await window.api.chatMargaret({
+      audioBuffer,
+      history: chatHistory.slice(-MAX_HISTORY_TURNS),
+    });
+  } catch (err) {
+    console.error("[chat] ipc error:", err);
+    res = { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+
+  chatThinking = false;
+
+  if (!res || !res.ok) {
+    setChatStatus(res && res.error ? res.error : "Something went wrong. Try again.", true);
+    setChatButtonState("idle");
+    return;
+  }
+
+  const question = (res.transcribedQuestion || "").trim();
+  const answer = (res.answer || "").trim();
+
+  if (question) appendBubble("user", question);
+  if (answer) appendBubble("assistant", answer);
+
+  if (question) chatHistory.push({ role: "user", content: question });
+  if (answer) chatHistory.push({ role: "assistant", content: answer });
+
+  setChatStatus("");
+  setChatButtonState("idle");
+
+  if (answer) speak(answer);
+});

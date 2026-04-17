@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as dotenv from "dotenv";
 import { transcribe } from "./ai/transcribe";
 import { analyze, analyzeFollowup, Verdict } from "./ai/analyze";
+import { chat, ChatTurn } from "./ai/chat";
 
 // Reset any inherited key: we only trust the one stored under userData after setup.
 // Otherwise Windows user env vars or a project .env silently bypass the setup flow.
@@ -260,6 +261,27 @@ ipcMain.handle("try-again", async (): Promise<{ ok: boolean; error?: string }> =
     return { ok: false, error: msg };
   }
 });
+
+ipcMain.handle(
+  "chat-margaret",
+  async (
+    _e,
+    payload: { audioBuffer: ArrayBuffer; history: ChatTurn[] }
+  ): Promise<{ ok: boolean; answer?: string; transcribedQuestion?: string; error?: string }> => {
+    try {
+      const audio = Buffer.from(payload.audioBuffer);
+      const screenshot = lastContext?.screenshotBuffer ?? null;
+      const history = Array.isArray(payload.history) ? payload.history : [];
+      const result = await chat(audio, screenshot, history);
+      return { ok: true, answer: result.answer, transcribedQuestion: result.transcribedQuestion };
+    } catch (err: unknown) {
+      const e = err as any;
+      const msg = e?.message || String(err);
+      console.error("[chat] error:", msg);
+      return { ok: false, error: msg };
+    }
+  }
+);
 
 ipcMain.handle("close-result", () => {
   if (resultWin && !resultWin.isDestroyed()) resultWin.close();
