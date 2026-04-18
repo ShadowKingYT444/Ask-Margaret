@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v0.2.0)'
+        required: true
+        default: 'v0.2.0'
 
 jobs:
   build-windows:
@@ -26,10 +32,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           files: release/Ask-Margaret-Setup-*.exe
           generate_release_notes: false
           body: |
-            ## What's new in ${{ github.ref_name }}
+            ## What's new in ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
             - Conversational voice chatbot in the Result window
             - Smarter analysis with senior-friendly big UI and 4 modes
