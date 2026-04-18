@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/win-unpacked/
+release/.icon-ico/
 release/*.blockmap
 release/builder-debug.yml
 release/__uninstaller-*
