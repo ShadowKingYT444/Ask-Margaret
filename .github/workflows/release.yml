@@ -4,12 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+      - 'claude/fix-help-button-transcription-hswh8'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. v0.2.0)'
+        description: 'Release version (e.g. v0.2.1)'
         required: true
-        default: 'v0.2.0'
+        default: 'v0.2.1'
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -24,6 +30,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Read package version
+        id: pkg
+        shell: bash
+        run: echo "version=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Determine release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ steps.pkg.outputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build installer
         run: npm run package:win
         env:
@@ -32,16 +55,22 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
           files: release/Ask-Margaret-Setup-*.exe
           generate_release_notes: false
           body: |
-            ## What's new in ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+            ## What's new in ${{ steps.tag.outputs.tag }}
 
-            - Conversational voice chatbot in the Result window
-            - Smarter analysis with senior-friendly big UI and 4 modes
-            - First-run Gemini API key prompt on every install
+            - Fixed the "I need help" button so transcription no longer fails
+              with a "spawn ...\\app.asar\\...\\ffmpeg.exe ENOENT" error.
+            - Robust ffmpeg-static resolver tries the unpacked path, then the
+              raw path, then `process.resourcesPath`, and verifies the binary
+              exists before spawning.
+            - Friendlier on-button error labels (no more raw paths leaking).
+            - Result window now renders even if the renderer script crashes
+              before signaling `resultReady()`.
 
-            **To install:** Download `Ask-Margaret-Setup-*.exe` below and double-click it.
+            **To install:** download `Ask-Margaret-Setup-*.exe` below and double-click it.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
