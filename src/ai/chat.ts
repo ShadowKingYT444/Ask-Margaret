@@ -1,34 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
-import * as fs from "fs";
-import * as path from "path";
 import { transcribe } from "./transcribe";
+import { extractText, getClient, loadPrompt, VisionInput } from "./common";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
 const CHAT_MODEL = "gemini-2.5-flash";
 const MAX_HISTORY_TURNS = 10;
-
-function getClient(): GoogleGenAI {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY not set.");
-  return new GoogleGenAI({ apiKey: key });
-}
-
-function loadPrompt(file: string): string {
-  const compiled = path.join(__dirname, "..", "prompts", file);
-  if (fs.existsSync(compiled)) return fs.readFileSync(compiled, "utf-8");
-  const raw = path.join(__dirname, "..", "..", "src", "prompts", file);
-  return fs.readFileSync(raw, "utf-8");
-}
-
-function extractText(response: any): string {
-  if (typeof response?.text === "string" && response.text.length > 0) return response.text;
-  const parts = response?.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts)) {
-    return parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("").trim();
-  }
-  return "";
-}
 
 function parseJson(text: string): any {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -43,7 +19,7 @@ function parseJson(text: string): any {
 
 export async function chat(
   audioBuffer: Buffer,
-  screenshot: Buffer | null,
+  screenshot: VisionInput | null,
   history: ChatTurn[]
 ): Promise<{ answer: string; transcribedQuestion: string }> {
   const transcribedQuestion = (await transcribe(audioBuffer)).trim();
@@ -61,7 +37,7 @@ export async function chat(
   const latestParts: any[] = [];
   if (screenshot) {
     latestParts.push({
-      inlineData: { mimeType: "image/png", data: screenshot.toString("base64") },
+      inlineData: { mimeType: screenshot.mimeType, data: screenshot.data.toString("base64") },
     });
   }
   latestParts.push({ text: transcribedQuestion });

@@ -70,9 +70,12 @@ async function startRecording() {
 
     try {
       const blob = new Blob(chunks, { type: "audio/webm" });
-      const audioBuffer = await blob.arrayBuffer();
-
-      const screenshotBytes = await window.api.captureScreen();
+      const audioBufferPromise = blob.arrayBuffer();
+      const screenshotPromise = window.api.captureScreen();
+      const [audioBuffer, screenshotBytes] = await Promise.all([
+        audioBufferPromise,
+        screenshotPromise,
+      ]);
       // IPC returns a Node Buffer (Uint8Array-compatible). Normalize to ArrayBuffer.
       const screenshotBuffer =
         screenshotBytes instanceof ArrayBuffer

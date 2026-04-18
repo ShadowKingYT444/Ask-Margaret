@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, desktopCapturer, nativeImage, screen, session, shell } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 import * as dotenv from "dotenv";
 import { transcribe } from "./ai/transcribe";
 import { analyze, analyzeFollowup, Verdict } from "./ai/analyze";
 import { chat, ChatTurn } from "./ai/chat";
+import { VisionInput } from "./ai/common";
 
 // Reset any inherited key: we only trust the one stored under userData after setup.
 // Otherwise Windows user env vars or a project .env silently bypass the setup flow.
@@ -56,6 +57,7 @@ function createSetupWindow(): void {
 // Cache of last interaction for follow-up passes.
 let lastContext: {
   screenshotBuffer: Buffer;
+  modelScreenshot: VisionInput;
   transcript: string;
   verdict: Verdict;
 } | null = null;
@@ -67,6 +69,8 @@ function rendererPath(...segments: string[]): string {
 
 const BUTTON_W = 100;
 const BUTTON_H = 100;
+const MODEL_IMAGE_MAX_WIDTH = 1600;
+const MODEL_IMAGE_JPEG_QUALITY = 82;
 
 function positionFilePath(): string {
   return path.join(app.getPath("userData"), "button-position.json");
@@ -129,6 +133,24 @@ function createButtonWindow(): void {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => savePosition(nx, ny), 250);
   });
+}
+
+function optimizeScreenshotForModel(screenshot: Buffer): VisionInput {
+  try {
+    const image = nativeImage.createFromBuffer(screenshot);
+    const { width, height } = image.getSize();
+    if (!width || !height) return { data: screenshot, mimeType: "image/png" };
+
+    const resized =
+      width > MODEL_IMAGE_MAX_WIDTH
+        ? image.resize({ width: MODEL_IMAGE_MAX_WIDTH, quality: "good" })
+        : image;
+    const jpeg = resized.toJPEG(MODEL_IMAGE_JPEG_QUALITY);
+    if (jpeg.length > 0) return { data: jpeg, mimeType: "image/jpeg" };
+  } catch (err) {
+    console.warn("[margaret] screenshot optimization failed:", err);
+  }
+  return { data: screenshot, mimeType: "image/png" };
 }
 
 function setButtonVisible(visible: boolean): void {
@@ -223,8 +245,12 @@ ipcMain.handle(
       setButtonVisible(false);
       const audio = Buffer.from(payload.audioBuffer);
       const screenshot = Buffer.from(payload.screenshotBuffer);
+      const modelScreenshot = optimizeScreenshotForModel(screenshot);
       console.log(
         `[margaret] received audio=${audio.length}B screenshot=${screenshot.length}B`
+      );
+      console.log(
+        `[margaret] model screenshot=${modelScreenshot.data.length}B mime=${modelScreenshot.mimeType}`
       );
 
       let transcript: string;
@@ -243,7 +269,7 @@ ipcMain.handle(
 
       let verdict;
       try {
-        verdict = await analyze(screenshot, transcript);
+        verdict = await analyze(modelScreenshot, transcript);
       } catch (e: any) {
         const raw = e?.message || String(e);
         console.error("[margaret] analyze error:", raw);
@@ -251,7 +277,7 @@ ipcMain.handle(
       }
       console.log("[margaret] verdict:", verdict);
 
-      lastContext = { screenshotBuffer: screenshot, transcript, verdict };
+      lastContext = { screenshotBuffer: screenshot, modelScreenshot, transcript, verdict };
       resultSentForCurrentContext = false;
       openResultWindow();
       return { ok: true };
@@ -273,7 +299,7 @@ ipcMain.handle("try-again", async (): Promise<{ ok: boolean; error?: string }> =
   if (!lastContext) return { ok: false, error: "No previous question to follow up on." };
   try {
     const verdict = await analyzeFollowup(
-      lastContext.screenshotBuffer,
+      lastContext.modelScreenshot,
       lastContext.transcript,
       lastContext.verdict
     );
@@ -296,7 +322,7 @@ ipcMain.handle(
   ): Promise<{ ok: boolean; answer?: string; transcribedQuestion?: string; error?: string }> => {
     try {
       const audio = Buffer.from(payload.audioBuffer);
-      const screenshot = lastContext?.screenshotBuffer ?? null;
+      const screenshot = lastContext?.modelScreenshot ?? null;
       const history = Array.isArray(payload.history) ? payload.history : [];
       const result = await chat(audio, screenshot, history);
       return { ok: true, answer: result.answer, transcribedQuestion: result.transcribedQuestion };
@@ -361,9 +387,10 @@ async function runTestHarness(): Promise<void> {
     process.env.MARGARET_TEST_TRANSCRIPT ||
     "Where should I press to send a message right now?";
   console.log(`[test-harness] image=${imgPath} transcript=${JSON.stringify(transcript)}`);
-  const verdict = await analyze(screenshot, transcript);
+  const modelScreenshot = optimizeScreenshotForModel(screenshot);
+  const verdict = await analyze(modelScreenshot, transcript);
   console.log("[test-harness] verdict:", verdict);
-  lastContext = { screenshotBuffer: screenshot, transcript, verdict };
+  lastContext = { screenshotBuffer: screenshot, modelScreenshot, transcript, verdict };
   openResultWindow();
 }
 

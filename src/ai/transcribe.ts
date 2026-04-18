@@ -1,9 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { spawn } from "child_process";
 import ffmpegStatic from "ffmpeg-static";
+import { extractText, getClient } from "./common";
 
 function resolveFfmpegBin(): string | null {
   const raw = ffmpegStatic as unknown as string | null;
@@ -74,24 +74,6 @@ function convertWebmToWav(webmPath: string, wavPath: string): Promise<void> {
       else reject(new Error(`Couldn't process your voice. Please try again. (code ${code})`));
     });
   });
-}
-
-function getClient(): GoogleGenAI {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY not set.");
-  return new GoogleGenAI({ apiKey: key });
-}
-
-function extractText(response: any): string {
-  if (typeof response?.text === "string" && response.text.length > 0) return response.text;
-  const parts = response?.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts)) {
-    return parts
-      .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
-      .join("")
-      .trim();
-  }
-  return "";
 }
 
 export async function transcribe(audioBuffer: Buffer): Promise<string> {

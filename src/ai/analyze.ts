@@ -1,6 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
-import * as fs from "fs";
-import * as path from "path";
+import { extractText, getClient, loadPrompt, VisionInput } from "./common";
 
 // Gemini returns boxes as [ymin, xmin, ymax, xmax] normalized 0-1000.
 // We keep the internal Verdict in {x,y,w,h} (0-1000) so the renderer
@@ -44,30 +42,8 @@ export type ReadVerdict = {
 
 export type Verdict = ClickVerdict | ScamVerdict | ReadVerdict;
 
-const ANALYZE_MODEL = "gemini-2.5-pro";
+const ANALYZE_MODEL = "gemini-2.5-flash";
 const ROUTER_MODEL = "gemini-2.5-flash";
-
-function getClient(): GoogleGenAI {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY not set.");
-  return new GoogleGenAI({ apiKey: key });
-}
-
-function loadPrompt(file: string): string {
-  const compiled = path.join(__dirname, "..", "prompts", file);
-  if (fs.existsSync(compiled)) return fs.readFileSync(compiled, "utf-8");
-  const raw = path.join(__dirname, "..", "..", "src", "prompts", file);
-  return fs.readFileSync(raw, "utf-8");
-}
-
-function extractText(response: any): string {
-  if (typeof response?.text === "string" && response.text.length > 0) return response.text;
-  const parts = response?.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts)) {
-    return parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("").trim();
-  }
-  return "";
-}
 
 function parseJson(text: string): any {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -115,7 +91,7 @@ function normalizeBox2d(raw: any): { x: number; y: number; w: number; h: number 
 async function callGemini(
   model: string,
   system: string,
-  screenshot: Buffer,
+  screenshot: VisionInput,
   userText: string,
   thinkingBudget: number | null
 ): Promise<string> {
@@ -133,7 +109,7 @@ async function callGemini(
       {
         role: "user",
         parts: [
-          { inlineData: { mimeType: "image/png", data: screenshot.toString("base64") } },
+          { inlineData: { mimeType: screenshot.mimeType, data: screenshot.data.toString("base64") } },
           { text: userText },
         ],
       },
@@ -145,7 +121,7 @@ async function callGemini(
   return text;
 }
 
-export async function classifyMode(screenshot: Buffer, transcript: string): Promise<Mode> {
+export async function classifyMode(screenshot: VisionInput, transcript: string): Promise<Mode> {
   try {
     const system = loadPrompt("router_prompt.txt");
     const text = await callGemini(ROUTER_MODEL, system, screenshot, `User said: "${transcript}"`, 0);
@@ -209,59 +185,59 @@ function parseReadVerdict(text: string): ReadVerdict {
   };
 }
 
-async function analyzeClick(screenshot: Buffer, transcript: string): Promise<ClickVerdict> {
+async function analyzeClick(screenshot: VisionInput, transcript: string): Promise<ClickVerdict> {
   const system = loadPrompt("analyze_prompt.txt");
   const text = await callGemini(
     ANALYZE_MODEL,
     system,
     screenshot,
     `The user said: "${transcript}"`,
-    null // allow default thinking on Pro for spatial reasoning
+    0
   );
   console.log("[analyze click] raw:", text.slice(0, 300));
   return parseClickVerdict(text, "help_click");
 }
 
-async function analyzeScam(screenshot: Buffer, transcript: string): Promise<ScamVerdict> {
+async function analyzeScam(screenshot: VisionInput, transcript: string): Promise<ScamVerdict> {
   const system = loadPrompt("scam_prompt.txt");
   const text = await callGemini(
     ANALYZE_MODEL,
     system,
     screenshot,
     `The user is worried and said: "${transcript}"`,
-    null
+    0
   );
   console.log("[analyze scam] raw:", text.slice(0, 300));
   return parseScamVerdict(text);
 }
 
-async function analyzeRead(screenshot: Buffer, transcript: string): Promise<ReadVerdict> {
+async function analyzeRead(screenshot: VisionInput, transcript: string): Promise<ReadVerdict> {
   const system = loadPrompt("read_prompt.txt");
   const text = await callGemini(
     ANALYZE_MODEL,
     system,
     screenshot,
     `The user said: "${transcript}"`,
-    null
+    0
   );
   console.log("[analyze read] raw:", text.slice(0, 300));
   return parseReadVerdict(text);
 }
 
-async function analyzeWalkthrough(screenshot: Buffer, transcript: string): Promise<ClickVerdict> {
+async function analyzeWalkthrough(screenshot: VisionInput, transcript: string): Promise<ClickVerdict> {
   const system = loadPrompt("walkthrough_prompt.txt");
   const text = await callGemini(
     ANALYZE_MODEL,
     system,
     screenshot,
     `The user said: "${transcript}"`,
-    null
+    0
   );
   console.log("[analyze walk] raw:", text.slice(0, 300));
   return parseClickVerdict(text, "walkthrough");
 }
 
-export async function analyze(screenshot: Buffer, transcript: string): Promise<Verdict> {
+export async function analyze(screenshot: VisionInput, transcript: string): Promise<Verdict> {
   const mode = await classifyMode(screenshot, transcript);
   switch (mode) {
     case "scam_check":
@@ -277,7 +253,7 @@ export async function analyze(screenshot: Buffer, transcript: string): Promise<V
 }
 
 export async function analyzeFollowup(
-  screenshot: Buffer,
+  screenshot: VisionInput,
   transcript: string,
   previous: Verdict
 ): Promise<Verdict> {
@@ -285,13 +261,13 @@ export async function analyzeFollowup(
     // Re-run scam analysis with a "explain more" nudge.
     const system = loadPrompt("scam_prompt.txt") +
       "\n\nThe user was not satisfied. Be more specific: quote visible text and walk through why it is or isn't safe.";
-    const text = await callGemini(ANALYZE_MODEL, system, screenshot, `User said: "${transcript}". Give a deeper second look.`, null);
+    const text = await callGemini(ANALYZE_MODEL, system, screenshot, `User said: "${transcript}". Give a deeper second look.`, 0);
     return parseScamVerdict(text);
   }
   if (previous.mode === "read_explain") {
     const system = loadPrompt("read_prompt.txt") +
       "\n\nThe user wants more detail. Expand the bullets and read_aloud, but keep language simple.";
-    const text = await callGemini(ANALYZE_MODEL, system, screenshot, `User said: "${transcript}". Go into more detail.`, null);
+    const text = await callGemini(ANALYZE_MODEL, system, screenshot, `User said: "${transcript}". Go into more detail.`, 0);
     return parseReadVerdict(text);
   }
   // help_click / walkthrough
@@ -307,7 +283,7 @@ export async function analyzeFollowup(
     system,
     screenshot,
     `Original question: "${transcript}". Pick a different target.`,
-    null
+    0
   );
   return parseClickVerdict(text, prev.mode);
 }

@@ -1,6 +1,6 @@
 {
   "name": "ask-margaret",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "One-button desktop helper for seniors. Ask out loud, get an annotated screenshot back.",
   "main": "dist/main.js",
   "scripts": {
