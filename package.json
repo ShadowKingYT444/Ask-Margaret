@@ -9,6 +9,7 @@
     "dev": "npm run build && electron . --enable-logging",
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win",
+    "package:win:ci": "npm run build && electron-builder --win --publish never",
     "package:mac": "npm run build && electron-builder --mac"
   },
   "keywords": [

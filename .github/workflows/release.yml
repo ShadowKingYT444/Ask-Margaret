@@ -9,7 +9,10 @@ on:
       version:
         description: 'Release version (e.g. v0.2.0)'
         required: true
-        default: 'v0.2.0'
+        default: 'v0.2.1'
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -25,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Build installer
-        run: npm run package:win
+        run: npm run package:win:ci
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
@@ -43,5 +46,4 @@ jobs:
             - First-run Gemini API key prompt on every install
 
             **To install:** Download `Ask-Margaret-Setup-*.exe` below and double-click it.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}

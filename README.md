@@ -1,10 +1,10 @@
 # Ask Margaret
 
-One-button desktop helper for seniors. They press the floating button, speak their question, and get back an annotated screenshot of their own screen with a circle around what to look at next — read aloud in a friendly voice.
+One-button desktop helper for seniors. They press the floating button, speak their question, and get back an annotated screenshot of their own screen with a circle around what to look at next, read aloud in a friendly voice.
 
-- **Stack:** Electron + TypeScript, local Whisper (`nodejs-whisper`), Google Gemini 2.5 Flash for vision, Web Speech API for TTS.
-- **Cost:** $0. Only network call is to Gemini (free tier).
-- **Privacy:** Voice never leaves the machine. Only the screenshot + transcript are sent to Gemini.
+- **Stack:** Electron + TypeScript, `ffmpeg-static` for audio conversion, Google Gemini 2.5 for transcription and vision, Web Speech API for TTS.
+- **Cost:** Uses Gemini API calls for transcription and analysis.
+- **Privacy:** The screenshot and transcribed request are sent to Gemini.
 
 ## Setup (first run)
 
@@ -12,20 +12,12 @@ One-button desktop helper for seniors. They press the floating button, speak the
    ```bash
    npm install
    ```
-2. **Add your Gemini API key** — copy `.env.example` to `.env` and paste your key:
-   ```
-   GEMINI_API_KEY=...
-   ```
-   Get a free key at https://aistudio.google.com/apikey.
-3. **Pre-download the Whisper model** (so the first real use isn't slow):
-   ```bash
-   npm run download-model
-   ```
-   Pick `base.en` at the prompt (~150 MB).
-4. **Run the app**
+2. **Run the app**
    ```bash
    npm start
    ```
+3. **Paste your Gemini API key on first launch**
+   Get a key at https://aistudio.google.com/apikey. The app stores it in its user data folder after you save it.
 
 ### macOS extra step
 Grant **Screen Recording** permission:
@@ -35,7 +27,7 @@ System Settings → Privacy & Security → Screen Recording → enable your Elec
 
 - A small always-on-top circular button sits in the bottom-right corner.
 - Press it → it pulses red and listens. Auto-stops after ~2 seconds of silence, or press again to stop.
-- The app hides the button, screenshots the screen, transcribes your question locally with Whisper, and sends (screenshot + transcript) to Gemini 2.5 Flash.
+- The app hides the button, screenshots the current display, transcribes your question, and sends the screenshot plus transcript to Gemini.
 - A big result window opens showing your screenshot with a yellow circle drawn on what to look at, plus a plain-English explanation read aloud.
 - Buttons: **Got it, thanks** / **Show me again** / **I still don't see it** (triggers a second pass).
 
@@ -47,8 +39,9 @@ ask-margaret/
 │   ├── main.ts              # Electron main: windows, IPC, screen capture
 │   ├── preload.ts           # contextBridge API exposed to the renderer
 │   ├── ai/
-│   │   ├── transcribe.ts    # webm -> wav (ffmpeg-static) -> nodejs-whisper
-│   │   └── analyze.ts       # Gemini 2.5 Flash vision call
+│   │   ├── transcribe.ts    # webm -> wav (ffmpeg-static) -> Gemini transcription
+│   │   ├── analyze.ts       # Gemini vision/router calls
+│   │   └── chat.ts          # follow-up voice chat in the result window
 │   └── prompts/
 │       ├── analyze_prompt.txt
 │       └── followup_prompt.txt
@@ -66,8 +59,8 @@ ask-margaret/
 | `npm run build` | TypeScript compile + copy prompt assets into `dist/` |
 | `npm start` | Build and launch Electron |
 | `npm run dev` | Same as start, with `--enable-logging` |
-| `npm run download-model` | Pre-download Whisper `base.en` model |
 | `npm run package` | Build a distributable with electron-builder |
+| `npm run package:win:ci` | Build the Windows installer in CI without auto-publishing from electron-builder |
 
 ## Known footguns
 

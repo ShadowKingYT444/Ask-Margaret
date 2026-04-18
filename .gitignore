@@ -1,9 +1,13 @@
 node_modules/
 dist/
+release/*.exe
+release/*.blockmap
+release/latest.yml
+release/builder-debug.yml
 release/win-unpacked/
 release/.icon-ico/
-release/*.blockmap
-release/builder-debug.yml
+test_screens/*.wav
+test_screens/*.webm
 release/__uninstaller-*
 .env
 *.log

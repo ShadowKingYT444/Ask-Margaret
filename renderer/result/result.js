@@ -53,6 +53,11 @@ function speak(text) {
   speechSynthesis.speak(u);
 }
 
+function cancelSpeech() {
+  if (typeof speechSynthesis === "undefined") return;
+  speechSynthesis.cancel();
+}
+
 function hideAll() {
   visualEl.classList.add("hidden");
   scamViewEl.classList.add("hidden");
@@ -231,7 +236,7 @@ window.api.onShowResult(({ screenshotBase64, verdict, transcript }) => {
 });
 
 gotIt.addEventListener("click", () => {
-  speechSynthesis.cancel();
+  cancelSpeech();
   window.api.closeResult();
 });
 
@@ -242,7 +247,7 @@ againBtn.addEventListener("click", () => {
 stillBtn.addEventListener("click", async () => {
   stillBtn.disabled = true;
   explanationEl.textContent = "Let me look again...";
-  speechSynthesis.cancel();
+  cancelSpeech();
   const res = await window.api.tryAgain();
   if (!res.ok) {
     explanationEl.textContent = "Sorry, I couldn't find another answer.";
@@ -401,7 +406,7 @@ function recordAudio() {
 
 chatMicBtn.addEventListener("click", async () => {
   if (chatRecording || chatThinking) return;
-  speechSynthesis.cancel();
+  cancelSpeech();
   setChatStatus("Listening...");
   setChatButtonState("recording");
 

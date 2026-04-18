@@ -131,6 +131,12 @@ function createButtonWindow(): void {
   });
 }
 
+function setButtonVisible(visible: boolean): void {
+  if (!buttonWin || buttonWin.isDestroyed()) return;
+  if (visible) buttonWin.show();
+  else buttonWin.hide();
+}
+
 function openResultWindow(): void {
   if (resultWin && !resultWin.isDestroyed()) {
     resultWin.focus();
@@ -163,14 +169,10 @@ function openResultWindow(): void {
   // finishes setting up IPC listeners. If something in the renderer throws
   // before that point, the window would hang forever — so also send after
   // did-finish-load as a backup.
-  resultWin.webContents.once("did-finish-load", () => {
-    setTimeout(() => {
-      if (resultWin && !resultWin.isDestroyed()) sendToResult();
-    }, 400);
-  });
   resultWin.loadFile(rendererPath("result", "index.html"));
   resultWin.on("closed", () => {
     resultWin = null;
+    setButtonVisible(true);
   });
 }
 
@@ -188,23 +190,27 @@ function sendToResult(): void {
 }
 
 ipcMain.handle("capture-screen", async (): Promise<Buffer> => {
-  if (buttonWin && !buttonWin.isDestroyed()) buttonWin.hide();
+  setButtonVisible(false);
   // Small delay so the hide actually takes effect before capture.
   await new Promise((r) => setTimeout(r, 120));
-  try {
-    const primary = screen.getPrimaryDisplay();
-    const sources = await desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: {
-        width: primary.size.width,
-        height: primary.size.height,
-      },
-    });
-    if (sources.length === 0) throw new Error("No screen sources returned by desktopCapturer.");
-    return sources[0].thumbnail.toPNG();
-  } finally {
-    if (buttonWin && !buttonWin.isDestroyed()) buttonWin.show();
-  }
+  const buttonBounds = buttonWin && !buttonWin.isDestroyed() ? buttonWin.getBounds() : null;
+  const targetDisplay = buttonBounds
+    ? screen.getDisplayNearestPoint({
+        x: buttonBounds.x + Math.round(buttonBounds.width / 2),
+        y: buttonBounds.y + Math.round(buttonBounds.height / 2),
+      })
+    : screen.getPrimaryDisplay();
+  const sources = await desktopCapturer.getSources({
+    types: ["screen"],
+    thumbnailSize: {
+      width: targetDisplay.size.width,
+      height: targetDisplay.size.height,
+    },
+  });
+  if (sources.length === 0) throw new Error("No screen sources returned by desktopCapturer.");
+  const matchingSource =
+    sources.find((source) => source.display_id === String(targetDisplay.id)) ?? sources[0];
+  return matchingSource.thumbnail.toPNG();
 });
 
 ipcMain.handle(
@@ -214,6 +220,7 @@ ipcMain.handle(
     payload: { audioBuffer: ArrayBuffer; screenshotBuffer: ArrayBuffer }
   ): Promise<{ ok: boolean; error?: string }> => {
     try {
+      setButtonVisible(false);
       const audio = Buffer.from(payload.audioBuffer);
       const screenshot = Buffer.from(payload.screenshotBuffer);
       console.log(
@@ -247,9 +254,9 @@ ipcMain.handle(
       lastContext = { screenshotBuffer: screenshot, transcript, verdict };
       resultSentForCurrentContext = false;
       openResultWindow();
-      // Renderer signals 'result-ready' on did-finish-load; send then.
       return { ok: true };
     } catch (err: unknown) {
+      setButtonVisible(true);
       const e = err as any;
       const msg = e?.stack || e?.message || String(err);
       console.error("[margaret] error:", msg);
