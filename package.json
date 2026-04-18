@@ -1,6 +1,6 @@
 {
   "name": "ask-margaret",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "One-button desktop helper for seniors. Ask out loud, get an annotated screenshot back.",
   "main": "dist/main.js",
   "scripts": {
@@ -50,7 +50,8 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.png",
-      "artifactName": "Ask-Margaret-Setup-${version}.${ext}"
+      "artifactName": "Ask-Margaret-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": true,
