@@ -1,6 +1,9 @@
 node_modules/
 dist/
-release/
+release/win-unpacked/
+release/*.blockmap
+release/builder-debug.yml
+release/__uninstaller-*
 .env
 *.log
 .DS_Store
