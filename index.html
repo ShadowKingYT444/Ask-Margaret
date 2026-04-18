@@ -65,7 +65,7 @@
           from an unknown publisher &mdash; click <strong>More info</strong> &rarr;
           <strong>Run anyway</strong>.
         </p>
-        <a class="button primary" href="https://github.com/ShadowKingYT444/Ask-Margaret/releases/latest/download/Ask-Margaret-Setup-0.1.0.exe">
+        <a class="button primary" id="download-btn" href="https://github.com/ShadowKingYT444/Ask-Margaret/releases/latest">
           Download for Windows
         </a>
         <p class="small">
@@ -100,5 +100,16 @@
         </p>
       </footer>
     </main>
+  <script>
+    fetch('https://api.github.com/repos/ShadowKingYT444/Ask-Margaret/releases/latest')
+      .then(r => r.json())
+      .then(data => {
+        const asset = data.assets && data.assets.find(a => a.name.endsWith('.exe'));
+        if (asset) {
+          document.getElementById('download-btn').href = asset.browser_download_url;
+        }
+      })
+      .catch(() => {});
+  </script>
   </body>
 </html>
