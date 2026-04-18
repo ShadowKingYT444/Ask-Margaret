@@ -5,17 +5,47 @@ import * as os from "os";
 import { spawn } from "child_process";
 import ffmpegStatic from "ffmpeg-static";
 
-const FFMPEG_BIN: string | null = (() => {
+function resolveFfmpegBin(): string | null {
   const raw = ffmpegStatic as unknown as string | null;
-  if (!raw) return null;
-  // In packaged app, ffmpeg-static binary lives inside app.asar.unpacked.
-  return raw.replace("app.asar", "app.asar.unpacked");
-})();
+  const candidates: string[] = [];
+
+  if (raw) {
+    // Packaged Electron apps: the ffmpeg binary is asarUnpack'd. Rewrite the
+    // /app.asar/ segment to /app.asar.unpacked/ unless the resolver already
+    // returned the unpacked path (which would turn into .unpacked.unpacked).
+    if (raw.includes("app.asar") && !raw.includes("app.asar.unpacked")) {
+      candidates.push(raw.replace(/app\.asar([\\/])/, "app.asar.unpacked$1"));
+    }
+    candidates.push(raw);
+  }
+
+  // Last-resort fallback: derive the path from Electron's resourcesPath.
+  const resPath = (process as any).resourcesPath as string | undefined;
+  if (resPath) {
+    const exe = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+    candidates.push(path.join(resPath, "app.asar.unpacked", "node_modules", "ffmpeg-static", exe));
+  }
+
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) {
+        console.log(`[transcribe] ffmpeg found at ${p}`);
+        return p;
+      }
+    } catch {
+      // ignore and keep trying
+    }
+  }
+  console.warn(`[transcribe] ffmpeg binary not found. tried=${JSON.stringify(candidates)}`);
+  return null;
+}
+
+const FFMPEG_BIN: string | null = resolveFfmpegBin();
 
 function convertWebmToWav(webmPath: string, wavPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!FFMPEG_BIN) {
-      reject(new Error("ffmpeg-static binary not found."));
+      reject(new Error("Audio converter is missing. Please reinstall Ask Margaret."));
       return;
     }
     const proc = spawn(FFMPEG_BIN, [
@@ -32,10 +62,16 @@ function convertWebmToWav(webmPath: string, wavPath: string): Promise<void> {
     ]);
     let stderr = "";
     proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("error", reject);
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      if (err && err.code === "ENOENT") {
+        reject(new Error("Audio converter is missing. Please reinstall Ask Margaret."));
+      } else {
+        reject(new Error(`Audio conversion failed: ${err?.message || err}`));
+      }
+    });
     proc.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg failed (${code}): ${stderr}`));
+      else reject(new Error(`Couldn't process your voice. Please try again. (code ${code})`));
     });
   });
 }

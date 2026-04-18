@@ -159,14 +159,27 @@ function openResultWindow(): void {
       resultWin.show();
     }
   });
+  // Belt-and-suspenders: renderer normally signals 'result-ready' once it
+  // finishes setting up IPC listeners. If something in the renderer throws
+  // before that point, the window would hang forever — so also send after
+  // did-finish-load as a backup.
+  resultWin.webContents.once("did-finish-load", () => {
+    setTimeout(() => {
+      if (resultWin && !resultWin.isDestroyed()) sendToResult();
+    }, 400);
+  });
   resultWin.loadFile(rendererPath("result", "index.html"));
   resultWin.on("closed", () => {
     resultWin = null;
   });
 }
 
+let resultSentForCurrentContext = false;
+
 function sendToResult(): void {
   if (!lastContext || !resultWin || resultWin.isDestroyed()) return;
+  if (resultSentForCurrentContext) return;
+  resultSentForCurrentContext = true;
   resultWin.webContents.send("show-result", {
     screenshotBase64: lastContext.screenshotBuffer.toString("base64"),
     verdict: lastContext.verdict,
@@ -211,23 +224,28 @@ ipcMain.handle(
       try {
         transcript = await transcribe(audio);
       } catch (e: any) {
-        throw new Error(`[transcribe] ${e?.message || e}`);
+        const raw = e?.message || String(e);
+        console.error("[margaret] transcribe error:", raw);
+        throw new Error(raw);
       }
       console.log("[margaret] transcript:", JSON.stringify(transcript));
 
       if (!transcript || transcript.length < 2) {
-        throw new Error("No speech detected. Try again and speak clearly.");
+        throw new Error("I didn't hear you. Please try again and speak clearly.");
       }
 
       let verdict;
       try {
         verdict = await analyze(screenshot, transcript);
       } catch (e: any) {
-        throw new Error(`[gemini] ${e?.message || e}`);
+        const raw = e?.message || String(e);
+        console.error("[margaret] analyze error:", raw);
+        throw new Error("I couldn't reach Gemini. Check your internet and API key.");
       }
       console.log("[margaret] verdict:", verdict);
 
       lastContext = { screenshotBuffer: screenshot, transcript, verdict };
+      resultSentForCurrentContext = false;
       openResultWindow();
       // Renderer signals 'result-ready' on did-finish-load; send then.
       return { ok: true };
@@ -253,6 +271,7 @@ ipcMain.handle("try-again", async (): Promise<{ ok: boolean; error?: string }> =
       lastContext.verdict
     );
     lastContext = { ...lastContext, verdict };
+    resultSentForCurrentContext = false;
     sendToResult();
     return { ok: true };
   } catch (err: unknown) {
